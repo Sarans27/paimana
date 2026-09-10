@@ -1,135 +1,120 @@
 // src/components/ProjectModal.jsx
-// A popup overlay that shows project details when you click "Quick View".
-//
-// PROPS:
-//   project  — the project object to display (or null to hide)
-//   onClose  — function called when the modal should close
-//   onViewDetails — function called when "View Full Details" is clicked
+// Overlay with project summary. Props: project, onClose, onViewDetails.
+// Accessible dialog: Escape closes, Tab cycles inside (focus trap),
+// background scroll locks, and focus returns to the invoking element.
 
+import { useEffect, useRef } from "react";
 import RiskBadge from "./RiskBadge";
 import ProgressBar from "./ProgressBar";
-
-const BLUE = "#0B3D91";
-const ORANGE = "#E8620C";
-
-const closeButtonStyle = {
-  position: "absolute",
-  top: "12px",
-  right: "16px",
-  background: "none",
-  border: "none",
-  fontSize: "24px",
-  cursor: "pointer",
-  color: "#888",
-  padding: "4px",
-};
-
-const headerStyle = {
-  margin: "0 0 4px",
-  fontSize: "20px",
-  color: BLUE,
-  paddingRight: "32px",
-};
-
-const metaStyle = {
-  fontSize: "13px",
-  color: "#6B7280",
-  margin: "0 0 20px",
-};
-
-const rowStyle = {
-  display: "flex",
-  justifyContent: "space-between",
-  padding: "8px 0",
-  borderBottom: "1px solid #f0f0f0",
-  fontSize: "14px",
-};
-
-const labelStyle = { color: "#6B7280" };
-const valueStyle = { fontWeight: "bold" };
-
-const viewDetailsButtonStyle = {
-  width: "100%",
-  padding: "10px",
-  fontSize: "15px",
-  fontWeight: "bold",
-  backgroundColor: ORANGE,
-  color: "white",
-  border: "none",
-  borderRadius: "8px",
-  cursor: "pointer",
-  marginTop: "20px",
-  transition: "background-color 0.2s",
-};
+import { formatBudgetCr } from "../utils/format";
 
 function ProjectModal({ project, onClose, onViewDetails }) {
-  // If no project, don't render anything
+  const dialogRef = useRef(null);
+
+  useEffect(() => {
+    if (!project) return undefined;
+    const previouslyFocused =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const node = dialogRef.current;
+
+    function focusables() {
+      if (!node) return [];
+      return [...node.querySelectorAll(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      )].filter((el) => !el.disabled);
+    }
+
+    // Move focus into the dialog (close button first).
+    const first = focusables()[0];
+    if (first) first.focus();
+
+    function onKey(e) {
+      if (e.key === "Escape") {
+        onClose();
+        return;
+      }
+      if (e.key !== "Tab") return;
+      const items = focusables();
+      if (items.length === 0) return;
+      const firstItem = items[0];
+      const lastItem = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === firstItem) {
+        e.preventDefault();
+        lastItem.focus();
+      } else if (!e.shiftKey && document.activeElement === lastItem) {
+        e.preventDefault();
+        firstItem.focus();
+      }
+    }
+
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+      if (previouslyFocused) previouslyFocused.focus();
+    };
+  }, [project, onClose]);
+
   if (!project) return null;
 
   return (
-    // Clicking the dark overlay closes the modal
     <div className="modal-overlay" onClick={onClose}>
-      {/* Clicking INSIDE the modal should NOT close it */}
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-
-        {/* Close button (×) */}
-        <button onClick={onClose} style={closeButtonStyle}>×</button>
-
-        {/* Header */}
-        <h2 style={headerStyle}>{project.name}</h2>
-        <p style={metaStyle}>
+      <div
+        className="modal-content modal"
+        onClick={(e) => e.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-label={project.name}
+        ref={dialogRef}
+      >
+        <button type="button" className="modal__close" onClick={onClose} aria-label="Close dialog">
+          ×
+        </button>
+        <h2>{project.name}</h2>
+        <p className="modal__meta">
           ID: {project.id} &nbsp;|&nbsp; {project.sector} &nbsp;|&nbsp; {project.state}
         </p>
-
-        {/* Info rows */}
-        <div style={rowStyle}>
-          <span style={labelStyle}>Status</span>
-          <span style={valueStyle}>{project.status}</span>
+        <div className="kv">
+          <span className="kv__label">Status</span>
+          <span className="kv__value">{project.status}</span>
         </div>
-
-        <div style={rowStyle}>
-          <span style={labelStyle}>Risk</span>
-          <RiskBadge level={project.risk} />
+        <div className="kv">
+          <span className="kv__label">Risk</span>
+          <RiskBadge level={project.risk} score={project.riskScore} />
         </div>
-
-        {project.budget && (
-          <div style={rowStyle}>
-            <span style={labelStyle}>Budget</span>
-            <span style={valueStyle}>₹{project.budget.toLocaleString()} Cr</span>
+        {project.budget ? (
+          <div className="kv">
+            <span className="kv__label">Budget</span>
+            <span className="kv__value">{formatBudgetCr(project.budget)}</span>
           </div>
-        )}
-
-        {project.department && (
-          <div style={rowStyle}>
-            <span style={labelStyle}>Department</span>
-            <span style={{ ...valueStyle, fontSize: "13px", textAlign: "right", maxWidth: "60%" }}>
+        ) : null}
+        {project.department ? (
+          <div className="kv">
+            <span className="kv__label">Department</span>
+            <span className="kv__value" style={{ fontSize: 13, maxWidth: "60%" }}>
               {project.department}
             </span>
           </div>
-        )}
-
-        {/* Progress bar */}
-        {project.progress !== undefined && (
-          <div style={{ marginTop: "16px" }}>
+        ) : null}
+        {project.progress !== undefined ? (
+          <div style={{ marginTop: 16 }}>
             <ProgressBar label="Progress" progress={project.progress} />
           </div>
-        )}
-
-        {/* Description snippet */}
-        {project.description && (
-          <p style={{ fontSize: "13px", color: "#444", lineHeight: "1.5", marginTop: "12px" }}>
+        ) : null}
+        {project.description ? (
+          <p style={{ fontSize: 13, color: "var(--muted)", lineHeight: 1.6, marginTop: 12 }}>
             {project.description.length > 200
-              ? project.description.substring(0, 200) + "..."
+              ? `${project.description.substring(0, 200)}…`
               : project.description}
           </p>
-        )}
-
-        {/* View Full Details button */}
+        ) : null}
         <button
+          type="button"
+          className="btn btn--primary btn--block"
+          style={{ marginTop: 20 }}
           onClick={() => onViewDetails(project)}
-          style={viewDetailsButtonStyle}
-          onMouseEnter={(e) => (e.target.style.backgroundColor = "#C45209")}
-          onMouseLeave={(e) => (e.target.style.backgroundColor = ORANGE)}
         >
           View Full Details →
         </button>

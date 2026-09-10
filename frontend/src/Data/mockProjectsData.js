@@ -199,7 +199,7 @@ const allProjects = [
     sector: "Water Supply",
     state: "Andhra Pradesh",
     status: "Delayed",
-    risk: "High",
+    risk: "Critical",
     progress: 40,
     lat: 17.25,
     lng: 81.64,

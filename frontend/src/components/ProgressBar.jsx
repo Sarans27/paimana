@@ -1,30 +1,33 @@
 // src/components/ProgressBar.jsx
-// A horizontal bar that visually shows a percentage (0-100).
-// Props: label (string), progress (number 0-100)
+// Horizontal progress indicator (0-100) with quartile tone mapping:
+// 0–25 critical-red, 26–50 amber, 51–75 government blue, 76–100 green.
+// Colors come from semantic tokens — never arbitrary.
 
 function ProgressBar({ label, progress }) {
+  const value = Math.max(0, Math.min(100, Number(progress) || 0));
+  const tone =
+    value < 25
+      ? "progress__fill--bad"
+      : value < 50
+        ? "progress__fill--warn"
+        : value < 75
+          ? "progress__fill--info"
+          : "progress__fill--good";
   return (
-    <div style={{ marginBottom: "16px" }}>
-      {/* Top row: label on left, percentage on right */}
-      <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "4px" }}>
-        <span style={{ fontSize: "14px" }}>{label}</span>
-        <span style={{ fontSize: "14px", fontWeight: "bold" }}>{progress}%</span>
+    <div className="progress" role="group" aria-label={`${label}: ${value} percent`}>
+      <div className="progress__top">
+        <span className="progress__label">{label}</span>
+        <span className="progress__value num">{value}%</span>
       </div>
-
-      {/* The bar background (gray) */}
-      <div style={{
-        width: "100%",
-        height: "10px",
-        backgroundColor: "#e0e0e0",
-        borderRadius: "5px",
-      }}>
-        {/* The filled portion (colored) — width is the progress percentage */}
-        <div style={{
-          width: `${progress}%`,
-          height: "100%",
-          backgroundColor: progress >= 70 ? "#27ae60" : progress >= 40 ? "#f39c12" : "#e74c3c",
-          borderRadius: "5px",
-        }} />
+      <div
+        className="progress__track"
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={value}
+        aria-label={label}
+      >
+        <div className={`progress__fill ${tone}`} style={{ width: `${value}%` }} />
       </div>
     </div>
   );

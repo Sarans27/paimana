@@ -1,72 +1,45 @@
 // src/pages/Projects.jsx
-// Projects page with URL-synced filters, debounced search, and API refetch.
+// Project registry: search + filters (URL-synced), card grid,
+// skeleton loading, friendly error, guided empty state.
 //
-// KEY CONCEPTS:
-// - useSearchParams: reads/writes URL query string (?search=mumbai&risk=High)
-// - useDebounce: delays search filtering by 300ms so it doesn't fire every keystroke
-// - useCallback: wraps handler functions so FilterBar (memo) doesn't re-render needlessly
-// - useMemo: caches the sector/state lists so they're only recomputed when data changes
+// Debouncing is justified: every keystroke would otherwise rewrite the
+// URL search params (history churn) and recompute the filtered list.
+// The 300ms pause collapses "Mumbai" from 6 updates to 1.
 
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import ProjectCard from "../components/ProjectCard";
 import FilterBar from "../components/FilterBar";
 import ProjectModal from "../components/ProjectModal";
-import Loading from "../components/Loading";
+import { ErrorState, EmptyState } from "../components/Feedback";
+import { CardSkeleton } from "../components/Skeletons";
 import { getProjects } from "../services/api";
+import { normalizeRiskLevel } from "../utils/risk";
 import useDebounce from "../hooks/useDebounce";
 
-const BLUE = "#0B3D91";
+const LOAD_ERROR_MESSAGE =
+  "The project registry could not be reached. Check your connection and try again.";
 
-const errorBoxStyle = {
-  textAlign: "center",
-  padding: "40px",
-  backgroundColor: "#fde8e8",
-  borderRadius: "8px",
-  color: "#e74c3c",
-};
-
-const retryButtonStyle = {
-  marginTop: "12px",
-  padding: "8px 20px",
-  fontSize: "14px",
-  backgroundColor: "#e74c3c",
-  color: "white",
-  border: "none",
-  borderRadius: "6px",
-  cursor: "pointer",
-};
-
-const gridStyle = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-  gap: "16px",
-};
-
-const emptyBoxStyle = {
-  textAlign: "center",
-  padding: "60px 20px",
-  color: "#6B7280",
-};
+function PageHead() {
+  return (
+    <div className="page-head">
+      <p className="page-head__eyebrow">Registry</p>
+      <h1>Projects</h1>
+      <p>Browse and monitor infrastructure projects across the national portfolio.</p>
+    </div>
+  );
+}
 
 function Projects() {
-  // ===== URL QUERY STRING =====
-  // useSearchParams reads and writes the URL's ?key=value pairs.
-  // Example URL: /projects?search=mumbai&risk=High&sector=Highways
   const [searchParams, setSearchParams] = useSearchParams();
-
-  // Read initial filter values FROM the URL (or use defaults)
   const [searchText, setSearchText] = useState(searchParams.get("search") || "");
   const [sectorFilter, setSectorFilter] = useState(searchParams.get("sector") || "All");
   const [stateFilter, setStateFilter] = useState(searchParams.get("state") || "All");
   const [riskFilter, setRiskFilter] = useState(searchParams.get("risk") || "All");
+  const [statusFilter, setStatusFilter] = useState(searchParams.get("status") || "All");
 
-  // ===== DEBOUNCED SEARCH =====
-  // The user's raw typing goes into searchText immediately (so the input feels responsive).
-  // But the FILTERING only uses debouncedSearch, which updates 300ms after the user stops typing.
   const debouncedSearch = useDebounce(searchText, 300);
 
-  // ===== DATA STATE =====
   const [projects, setProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -74,7 +47,6 @@ function Projects() {
 
   const navigate = useNavigate();
 
-  // ===== LOAD DATA ON PAGE OPEN =====
   useEffect(() => {
     loadProjects();
   }, []);
@@ -86,70 +58,89 @@ function Projects() {
       const data = await getProjects();
       setProjects(data);
     } catch (err) {
-      setError(err.message);
+      console.error("Failed to load projects:", err);
+      setError(LOAD_ERROR_MESSAGE);
     } finally {
       setLoading(false);
     }
   }
 
-  // ===== SYNC FILTERS TO URL =====
-  // Whenever any filter changes, update the URL query string.
-  // This makes filters shareable — copying the URL preserves the filters.
   useEffect(() => {
     const params = {};
     if (debouncedSearch) params.search = debouncedSearch;
     if (sectorFilter !== "All") params.sector = sectorFilter;
     if (stateFilter !== "All") params.state = stateFilter;
     if (riskFilter !== "All") params.risk = riskFilter;
-
-    // { replace: true } prevents creating a browser history entry for every keystroke
+    if (statusFilter !== "All") params.status = statusFilter;
     setSearchParams(params, { replace: true });
-  }, [debouncedSearch, sectorFilter, stateFilter, riskFilter, setSearchParams]);
+  }, [debouncedSearch, sectorFilter, stateFilter, riskFilter, statusFilter, setSearchParams]);
 
-  // ===== DYNAMIC DROPDOWN OPTIONS =====
-  // useMemo: only recompute these arrays when `projects` changes (not on every render).
   const sectors = useMemo(
-    () => [...new Set(projects.map((p) => p.sector))].sort(),
+    () => [...new Set(projects.map((p) => p.sector).filter(Boolean))].sort(),
     [projects]
   );
-
   const statesList = useMemo(
-    () => [...new Set(projects.map((p) => p.state))].sort(),
+    () => [...new Set(projects.map((p) => p.state).filter(Boolean))].sort(),
+    [projects]
+  );
+  const statuses = useMemo(
+    () => [...new Set(projects.map((p) => p.status).filter(Boolean))].sort(),
     [projects]
   );
 
-  // ===== STABLE CALLBACK REFS =====
-  // useCallback: wraps each handler so its identity stays the same across renders.
-  // Without this, FilterBar (wrapped in memo) would re-render on every parent render
-  // because it would receive a NEW function reference each time.
   const handleSearchChange = useCallback((val) => setSearchText(val), []);
   const handleSectorChange = useCallback((val) => setSectorFilter(val), []);
   const handleStateChange = useCallback((val) => setStateFilter(val), []);
   const handleRiskChange = useCallback((val) => setRiskFilter(val), []);
+  const handleStatusChange = useCallback((val) => setStatusFilter(val), []);
 
-  // ===== FILTERING LOGIC =====
-  // Uses debouncedSearch (not searchText) so filtering only happens after the delay.
+  const clearFilters = useCallback(() => {
+    setSearchText("");
+    setSectorFilter("All");
+    setStateFilter("All");
+    setRiskFilter("All");
+    setStatusFilter("All");
+  }, []);
+
+  const hasActiveFilters =
+    debouncedSearch.trim() !== "" ||
+    sectorFilter !== "All" ||
+    stateFilter !== "All" ||
+    riskFilter !== "All" ||
+    statusFilter !== "All";
+
   const filteredProjects = useMemo(() => {
+    const q = debouncedSearch.trim().toLowerCase();
     return projects.filter((project) => {
       const matchesSearch =
-        project.name.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-        project.sector.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-        project.state.toLowerCase().includes(debouncedSearch.toLowerCase());
+        !q ||
+        project.name.toLowerCase().includes(q) ||
+        project.sector.toLowerCase().includes(q) ||
+        project.state.toLowerCase().includes(q);
       const matchesSector = sectorFilter === "All" || project.sector === sectorFilter;
       const matchesState = stateFilter === "All" || project.state === stateFilter;
-      const matchesRisk = riskFilter === "All" || project.risk === riskFilter;
-      return matchesSearch && matchesSector && matchesState && matchesRisk;
+      const level = normalizeRiskLevel(project.risk, project.riskScore);
+      const matchesRisk = riskFilter === "All" || level === riskFilter;
+      const matchesStatus = statusFilter === "All" || project.status === statusFilter;
+      return matchesSearch && matchesSector && matchesState && matchesRisk && matchesStatus;
     });
-  }, [projects, debouncedSearch, sectorFilter, stateFilter, riskFilter]);
-
-  // ===== RENDER =====
+  }, [projects, debouncedSearch, sectorFilter, stateFilter, riskFilter, statusFilter]);
 
   if (loading) {
     return (
       <div>
-        <h1 style={{ margin: "0 0 4px", color: BLUE }}>Projects</h1>
-        <p style={{ margin: "0 0 24px", color: "#6B7280" }}>Browse and filter infrastructure projects</p>
-        <Loading />
+        <PageHead />
+        <div className="filterbar" aria-hidden="true">
+          <div className="skel skel--search" />
+          <div className="skel skel--select" />
+          <div className="skel skel--select" />
+        </div>
+        <div className="grid grid--projects" aria-label="Loading projects">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <CardSkeleton key={i} />
+          ))}
+        </div>
+        <p className="sr-only" role="status">Loading projects…</p>
       </div>
     );
   }
@@ -157,13 +148,12 @@ function Projects() {
   if (error) {
     return (
       <div>
-        <h1 style={{ margin: "0 0 4px", color: BLUE }}>Projects</h1>
-        <p style={{ margin: "0 0 24px", color: "#6B7280" }}>Browse and filter infrastructure projects</p>
-        <div style={errorBoxStyle}>
-          <p style={{ fontSize: "18px", fontWeight: "bold" }}>⚠️ Failed to load projects</p>
-          <p>{error}</p>
-          <button onClick={loadProjects} style={retryButtonStyle}>Try Again</button>
-        </div>
+        <PageHead />
+        <ErrorState
+          title="Something went wrong"
+          message={error}
+          onRetry={loadProjects}
+        />
       </div>
     );
   }
@@ -171,22 +161,18 @@ function Projects() {
   if (projects.length === 0) {
     return (
       <div>
-        <h1 style={{ margin: "0 0 4px", color: BLUE }}>Projects</h1>
-        <p style={{ margin: "0 0 24px", color: "#6B7280" }}>Browse and filter infrastructure projects</p>
-        <div style={emptyBoxStyle}>
-          <p style={{ fontSize: "48px", margin: "0" }}>📭</p>
-          <p style={{ fontSize: "18px", fontWeight: "bold" }}>No projects yet</p>
-        </div>
+        <PageHead />
+        <EmptyState
+          title="No projects yet"
+          message="No projects are registered in this view."
+        />
       </div>
     );
   }
 
   return (
     <div>
-      <h1 style={{ margin: "0 0 4px", color: BLUE }}>Projects</h1>
-      <p style={{ margin: "0 0 24px", color: "#6B7280" }}>Browse and filter infrastructure projects</p>
-
-      {/* FilterBar with debounced search + URL-synced selects */}
+      <PageHead />
       <FilterBar
         searchText={searchText}
         onSearchChange={handleSearchChange}
@@ -196,18 +182,21 @@ function Projects() {
         onStateChange={handleStateChange}
         riskFilter={riskFilter}
         onRiskChange={handleRiskChange}
+        statusFilter={statusFilter}
+        onStatusChange={handleStatusChange}
         sectors={sectors}
         states={statesList}
+        statuses={statuses}
+        onClear={clearFilters}
+        hasActive={hasActiveFilters}
       />
-
-      {/* Results Count */}
-      <p style={{ marginBottom: "16px", fontSize: "14px", color: "#9CA3AF" }}>
-        Showing {filteredProjects.length} of {projects.length} projects
+      <p className="results-count" aria-live="polite">
+        {hasActiveFilters
+          ? `Showing ${filteredProjects.length} of ${projects.length} projects`
+          : `${projects.length} project${projects.length === 1 ? "" : "s"}`}
       </p>
-
-      {/* Project Cards */}
       {filteredProjects.length > 0 ? (
-        <div style={gridStyle}>
+        <div className="grid grid--projects">
           {filteredProjects.map((project) => (
             <ProjectCard
               key={project.id}
@@ -218,11 +207,13 @@ function Projects() {
           ))}
         </div>
       ) : (
-        <p style={{ textAlign: "center", padding: "40px", color: "#6B7280" }}>
-          No projects match your filters. Try changing the search or filters.
-        </p>
+        <EmptyState
+          title="No matching projects"
+          message="Nothing in the registry matches this combination of search and filters. Try broadening the search or clearing the filters."
+          actionLabel="Clear filters"
+          onAction={clearFilters}
+        />
       )}
-
       <ProjectModal
         project={modalProject}
         onClose={() => setModalProject(null)}

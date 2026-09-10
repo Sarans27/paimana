@@ -1,31 +1,15 @@
 // src/pages/MapPage.jsx
-// The Map page — loads project data, then renders the India map.
-// Clicking "View Details" on a marker navigates to /projects/:id.
+// Map page — loads geocoded projects, renders the India map.
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
-import IndiaMap from "../components/Mapview";
-import Loading from "../components/Loading";
+import { ErrorState, EmptyState } from "../components/Feedback";
+import { MapSkeleton } from "../components/Skeletons";
 import { getProjects } from "../services/api";
 
-const errorBoxStyle = {
-  textAlign: "center",
-  padding: "40px",
-  backgroundColor: "#fde8e8",
-  borderRadius: "8px",
-  color: "#e74c3c",
-};
-
-const retryButtonStyle = {
-  marginTop: "12px",
-  padding: "8px 20px",
-  fontSize: "14px",
-  backgroundColor: "#e74c3c",
-  color: "white",
-  border: "none",
-  borderRadius: "6px",
-  cursor: "pointer",
-};
+// Leaflet is the heaviest dependency in the app — it loads only when
+// this route renders, never on initial boot or unrelated pages.
+const IndiaMap = lazy(() => import("../components/Mapview"));
 
 function MapPage() {
   const [projects, setProjects] = useState([]);
@@ -40,63 +24,78 @@ function MapPage() {
   async function loadProjects() {
     setLoading(true);
     setError(null);
-
     try {
       const data = await getProjects();
-      // Only include projects that have lat/lng coordinates
-      const projectsWithCoords = data.filter((p) => p.lat && p.lng);
-      setProjects(projectsWithCoords);
+      setProjects(data.filter((p) => Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng))));
     } catch (err) {
-      setError(err.message);
+      console.error("Failed to load map data:", err);
+      setError("The map data could not be loaded. Check your connection and try again.");
     } finally {
       setLoading(false);
     }
   }
 
-  // When "View Details" is clicked in a marker popup
   function handleProjectClick(project) {
     navigate(`/projects/${project.id}`);
   }
 
-  // ----- LOADING -----
   if (loading) {
     return (
       <div>
-        <h1 style={{ margin: "0 0 4px" }}>Project Map</h1>
-        <p style={{ margin: "0 0 24px", color: "#666" }}>
-          Infrastructure projects across India
-        </p>
-        <Loading />
+        <div className="page-head">
+          <p className="page-head__eyebrow">Geography</p>
+          <h1>Project Map</h1>
+          <p>Infrastructure projects across India, plotted at their registered coordinates.</p>
+        </div>
+        <MapSkeleton />
+        <p className="sr-only" role="status">Loading map data…</p>
       </div>
     );
   }
 
-  // ----- ERROR -----
   if (error) {
     return (
       <div>
-        <h1 style={{ margin: "0 0 4px" }}>Project Map</h1>
-        <p style={{ margin: "0 0 24px", color: "#666" }}>
-          Infrastructure projects across India
-        </p>
-        <div style={errorBoxStyle}>
-          <p style={{ fontSize: "18px", fontWeight: "bold" }}>⚠️ Failed to load map data</p>
-          <p>{error}</p>
-          <button onClick={loadProjects} style={retryButtonStyle}>Try Again</button>
+        <div className="page-head">
+          <p className="page-head__eyebrow">Geography</p>
+          <h1>Project Map</h1>
+          <p>Infrastructure projects across India, plotted at their registered coordinates.</p>
         </div>
+        <ErrorState
+          title="Failed to load map data"
+          message={error}
+          onRetry={loadProjects}
+        />
       </div>
     );
   }
 
-  // ----- SUCCESS -----
+  if (projects.length === 0) {
+    return (
+      <div>
+        <div className="page-head">
+          <p className="page-head__eyebrow">Geography</p>
+          <h1>Project Map</h1>
+          <p>Infrastructure projects across India, plotted at their registered coordinates.</p>
+        </div>
+        <EmptyState
+          title="No projects to map"
+          message="No projects with registered coordinates are available right now."
+        />
+      </div>
+    );
+  }
+
   return (
     <div>
-      <h1 style={{ margin: "0 0 4px" }}>Project Map</h1>
-      <p style={{ margin: "0 0 16px", color: "#666" }}>
-        {projects.length} infrastructure projects across India — click a marker to see details
-      </p>
-
-      <IndiaMap projects={projects} onProjectClick={handleProjectClick} />
+      <div className="page-head">
+        <p className="page-head__eyebrow">Geography</p>
+        <h1>Project Map</h1>
+        <p>{projects.length} infrastructure projects across India — select a marker to inspect a project, then open its full record.</p>
+      </div>
+      <Suspense fallback={<MapSkeleton />}>
+        <IndiaMap projects={projects} onProjectClick={handleProjectClick} />
+      </Suspense>
     </div>
   );
 }

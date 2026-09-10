@@ -27,6 +27,8 @@ function App() {
           <Route path="/public" element={<PublicDashboard />} />
           <Route path="/admin" element={<Dashboard />} />
           <Route path="/map" element={<MapPage />} />
+          {/* Unknown URLs fall back to the public overview, never a blank page */}
+          <Route path="*" element={<Navigate to="/public" replace />} />
         </Route>
       </Routes>
     </BrowserRouter>

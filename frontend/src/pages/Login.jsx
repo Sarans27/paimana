@@ -1,127 +1,109 @@
 // src/pages/Login.jsx
-// PAIMANA Login page — styled form with branding.
-// No real authentication yet — clicking "Sign In" navigates to /admin.
+// Official sign-in screen. Visuals live here; authentication lives in
+// src/services/api.js. Behavior is preserved: a successful sign-in
+// continues to the Admin Dashboard. No credentials are hardcoded,
+// nothing secret is stored, and errors stay generic.
 
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-
-const BLUE = "#0B3D91";
-const ORANGE = "#E8620C";
-
-const pageStyle = {
-  display: "flex",
-  justifyContent: "center",
-  alignItems: "center",
-  minHeight: "calc(100vh - 100px)",
-  padding: "20px",
-};
-
-const cardStyle = {
-  backgroundColor: "white",
-  borderRadius: "12px",
-  padding: "40px",
-  width: "100%",
-  maxWidth: "420px",
-  boxShadow: "0 4px 20px rgba(0,0,0,0.1)",
-  textAlign: "center",
-};
-
-const titleStyle = {
-  fontSize: "28px",
-  fontWeight: "bold",
-  color: BLUE,
-  margin: "0 0 4px",
-};
-
-const subtitleStyle = {
-  fontSize: "14px",
-  color: "#6B7280",
-  margin: "0 0 32px",
-};
-
-const inputStyle = {
-  width: "100%",
-  padding: "12px 14px",
-  fontSize: "15px",
-  border: "1px solid #ddd",
-  borderRadius: "8px",
-  outline: "none",
-  marginBottom: "16px",
-};
-
-const buttonStyle = {
-  width: "100%",
-  padding: "12px",
-  fontSize: "16px",
-  fontWeight: "bold",
-  backgroundColor: ORANGE,
-  color: "white",
-  border: "none",
-  borderRadius: "8px",
-  cursor: "pointer",
-  transition: "background-color 0.2s",
-};
-
-const noteStyle = {
-  marginTop: "20px",
-  fontSize: "12px",
-  color: "#9CA3AF",
-};
+import { login } from "../services/api";
 
 function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState(null);
   const navigate = useNavigate();
 
-  function handleSubmit(e) {
-    // e.preventDefault() stops the form from reloading the page
+  async function handleSubmit(e) {
     e.preventDefault();
-    // No real auth — just navigate to admin dashboard
-    navigate("/admin");
+    if (submitting) return;
+    const identity = email.trim();
+    if (!identity || !password) {
+      setError("Enter your official email and password to continue.");
+      return;
+    }
+    setSubmitting(true);
+    setError(null);
+    try {
+      await login({ email: identity, password });
+      navigate("/admin");
+    } catch (err) {
+      console.error("Sign-in failed:", err);
+      setError("Sign in failed. Check your details and try again.");
+      setSubmitting(false);
+    }
   }
 
   return (
-    <div style={pageStyle}>
-      <div style={cardStyle}>
-        {/* Brand */}
-        <p style={{ fontSize: "40px", margin: "0 0 8px" }}>🏛</p>
-        <h1 style={titleStyle}>PAIMANA</h1>
-        <p style={subtitleStyle}>
-          Project Assessment, Intelligence, Monitoring<br />
-          & National Analytics
+    <div className="login-split">
+      <div className="login-identity">
+        <div className="login-identity__crest" aria-hidden="true">◈</div>
+        <p className="login-identity__eyebrow">Government of India</p>
+        <h1>PAIMANA</h1>
+        <p className="login-identity__full">
+          Project Assessment, Intelligence, Monitoring &amp; National Analytics
         </p>
-
-        {/* Login Form */}
+        <ul className="login-identity__points">
+          <li>National infrastructure project monitoring</li>
+          <li>Portfolio status, risk, geography and delivery progress</li>
+          <li>Restricted to authorised government users</li>
+        </ul>
+      </div>
+      <div className="login-form">
+        <h2>Sign in</h2>
+        <p className="meta">Use your official credentials to access the monitoring dashboard.</p>
+        {error ? (
+          <p className="login-error" role="alert">{error}</p>
+        ) : null}
         <form onSubmit={handleSubmit}>
+          <label className="label" htmlFor="login-email">Official email</label>
           <input
+            id="login-email"
+            className="input login-form__input"
             type="email"
-            placeholder="Email address"
+            placeholder="name@gov.in"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            style={inputStyle}
             required
+            autoComplete="username"
+            disabled={submitting}
           />
-          <input
-            type="password"
-            placeholder="Password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={inputStyle}
-            required
-          />
+          <label className="label" htmlFor="login-password">Password</label>
+          <div className="password-row">
+            <input
+              id="login-password"
+              className="input password-row__input"
+              type={showPassword ? "text" : "password"}
+              placeholder="Enter your password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+              disabled={submitting}
+            />
+            <button
+              type="button"
+              className="btn btn--secondary password-row__toggle"
+              aria-pressed={showPassword}
+              aria-label={showPassword ? "Hide password" : "Show password"}
+              onClick={() => setShowPassword((v) => !v)}
+              disabled={submitting}
+            >
+              {showPassword ? "Hide" : "Show"}
+            </button>
+          </div>
           <button
             type="submit"
-            style={buttonStyle}
-            onMouseEnter={(e) => (e.target.style.backgroundColor = "#C45209")}
-            onMouseLeave={(e) => (e.target.style.backgroundColor = ORANGE)}
+            className="btn btn--primary btn--block login-form__submit"
+            disabled={submitting}
           >
-            Sign In →
+            {submitting ? "Signing in…" : "Sign In →"}
           </button>
         </form>
-
-        <p style={noteStyle}>
-          Authentication is not connected yet.<br />
-          Click "Sign In" to continue to the Admin Dashboard.
+        <p className="login-form__note">
+          Demonstration build — authentication is not connected.
         </p>
       </div>
     </div>

@@ -1,40 +1,17 @@
 // src/pages/PublicDashboard.jsx
-// Read-only public dashboard — shows stats, recent projects, and the India map.
-// Fetches data from the API (mock mode for now).
+// Read-only public dashboard — stats, map, and recent projects.
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, lazy, Suspense } from "react";
 import { useNavigate } from "react-router-dom";
 import { getDashboard, getProjects } from "../services/api";
-import Loading from "../components/Loading";
+import { ErrorState } from "../components/Feedback";
+import { StatSkeleton, MapSkeleton, CardSkeleton } from "../components/Skeletons";
 import StatCard from "../components/StatCard";
 import ProjectCard from "../components/ProjectCard";
 import ProjectModal from "../components/ProjectModal";
-import IndiaMap from "../components/Mapview";
 
-const BLUE = "#0B3D91";
-
-const errorBoxStyle = {
-  textAlign: "center",
-  padding: "40px",
-  backgroundColor: "#fde8e8",
-  borderRadius: "8px",
-  color: "#e74c3c",
-};
-
-const sectionStyle = {
-  backgroundColor: "white",
-  borderRadius: "8px",
-  padding: "20px",
-  boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-  marginBottom: "24px",
-};
-
-const sectionTitleStyle = {
-  margin: "0 0 16px",
-  fontSize: "18px",
-  fontWeight: "bold",
-  color: BLUE,
-};
+// Same split as the Map page: Leaflet travels in its own chunk.
+const IndiaMap = lazy(() => import("../components/Mapview"));
 
 function PublicDashboard() {
   const [dashData, setDashData] = useState(null);
@@ -52,15 +29,15 @@ function PublicDashboard() {
     setLoading(true);
     setError(null);
     try {
-      // Fetch dashboard stats and full project list in parallel
       const [dashboard, projects] = await Promise.all([
         getDashboard(),
         getProjects(),
       ]);
       setDashData(dashboard);
-      setMapProjects(projects.filter((p) => p.lat && p.lng));
+      setMapProjects(projects.filter((p) => Number.isFinite(Number(p.lat)) && Number.isFinite(Number(p.lng))));
     } catch (err) {
-      setError(err.message);
+      console.error("Failed to load public dashboard:", err);
+      setError("The public dashboard could not be loaded. Check your connection and try again.");
     } finally {
       setLoading(false);
     }
@@ -69,11 +46,23 @@ function PublicDashboard() {
   if (loading) {
     return (
       <div>
-        <h1 style={{ margin: "0 0 4px", color: BLUE }}>🏛 PAIMANA — Public Dashboard</h1>
-        <p style={{ margin: "0 0 24px", color: "#6B7280" }}>
-          Infrastructure Project Monitoring System
-        </p>
-        <Loading />
+        <div className="page-head">
+          <p className="page-head__eyebrow">Transparency</p>
+          <h1>Public Dashboard</h1>
+          <p>Read-only national view of infrastructure delivery — open data for citizens and oversight.</p>
+        </div>
+        <div className="grid grid--stats" aria-hidden="true">
+          {[0, 1, 2, 3].map((i) => (
+            <StatSkeleton key={i} />
+          ))}
+        </div>
+        <MapSkeleton />
+        <div className="grid grid--cards" style={{ marginTop: 20 }} aria-hidden="true">
+          {[0, 1, 2].map((i) => (
+            <CardSkeleton key={i} />
+          ))}
+        </div>
+        <p className="sr-only" role="status">Loading public dashboard…</p>
       </div>
     );
   }
@@ -81,61 +70,52 @@ function PublicDashboard() {
   if (error) {
     return (
       <div>
-        <h1 style={{ margin: "0 0 4px", color: BLUE }}>🏛 PAIMANA — Public Dashboard</h1>
-        <div style={errorBoxStyle}>
-          <p style={{ fontWeight: "bold", fontSize: "18px" }}>⚠️ Failed to load dashboard</p>
-          <p>{error}</p>
-          <button onClick={loadData} style={{
-            marginTop: "12px", padding: "8px 20px", fontSize: "14px",
-            backgroundColor: "#e74c3c", color: "white", border: "none",
-            borderRadius: "6px", cursor: "pointer",
-          }}>Try Again</button>
+        <div className="page-head">
+          <p className="page-head__eyebrow">Transparency</p>
+          <h1>Public Dashboard</h1>
+          <p>Read-only national view of infrastructure delivery — open data for citizens and oversight.</p>
         </div>
+        <ErrorState
+          title="Failed to load dashboard"
+          message={error}
+          onRetry={loadData}
+        />
       </div>
     );
   }
 
   return (
     <div>
-      <h1 style={{ margin: "0 0 4px", color: BLUE }}>🏛 PAIMANA — Public Dashboard</h1>
-      <p style={{ margin: "0 0 24px", color: "#6B7280" }}>
-        Infrastructure Project Monitoring System — Read-Only View
-      </p>
+      <div className="page-head">
+        <p className="page-head__eyebrow">Transparency</p>
+        <h1>Public Dashboard</h1>
+        <p>Read-only national view of infrastructure delivery — open data for citizens and oversight.</p>
+      </div>
 
-      {/* Stats Row */}
       {dashData?.stats && (
-        <div style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-          gap: "16px",
-          marginBottom: "24px",
-        }}>
+        <div className="grid grid--stats">
           {dashData.stats.map((stat) => (
             <StatCard key={stat.label} label={stat.label} value={stat.value} color={stat.color} />
           ))}
         </div>
       )}
 
-      {/* India Map */}
       {mapProjects.length > 0 && (
-        <div style={sectionStyle}>
-          <h2 style={sectionTitleStyle}>🗺️ Project Locations</h2>
-          <IndiaMap
-            projects={mapProjects}
-            onProjectClick={(p) => setModalProject(p)}
-          />
-        </div>
+        <section className="card card__pad section" aria-labelledby="public-map">
+          <h2 className="card__title" id="public-map">Project Locations</h2>
+          <Suspense fallback={<MapSkeleton />}>
+            <IndiaMap
+              projects={mapProjects}
+              onProjectClick={(p) => setModalProject(p)}
+            />
+          </Suspense>
+        </section>
       )}
 
-      {/* Recent Projects */}
       {dashData?.recentProjects && (
-        <div style={{ marginBottom: "24px" }}>
-          <h2 style={sectionTitleStyle}>📋 Recent Projects</h2>
-          <div style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
-            gap: "16px",
-          }}>
+        <section className="section" aria-labelledby="public-recent">
+          <h2 id="public-recent">Recent Projects</h2>
+          <div className="grid grid--cards">
             {dashData.recentProjects.map((project) => (
               <ProjectCard
                 key={project.id}
@@ -144,10 +124,9 @@ function PublicDashboard() {
               />
             ))}
           </div>
-        </div>
+        </section>
       )}
 
-      {/* Project Modal */}
       <ProjectModal
         project={modalProject}
         onClose={() => setModalProject(null)}

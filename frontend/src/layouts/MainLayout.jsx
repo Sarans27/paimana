@@ -1,22 +1,27 @@
 // src/layouts/MainLayout.jsx
-// This is the LAYOUT component.
-// It wraps every page with a Navbar at the top and a content area below.
-// The <Outlet /> is where the current page's content appears.
+// Wraps every page with the government header + content area + footer.
+// A skip link precedes the navigation so keyboard users can jump
+// straight to the page content.
 
 import { Outlet } from "react-router-dom";
 import Navbar from "../components/Navbar";
 
 function MainLayout() {
   return (
-    <div>
-      {/* The Navbar always shows at the top */}
+    <div className="app-shell">
+      <a className="skip-link" href="#main-content">
+        Skip to main content
+      </a>
       <Navbar />
-
-      {/* The <main> tag is the content area.
-          <Outlet /> is the "hole" where React Router injects the current page. */}
-      <main style={{ padding: "24px" }}>
+      <main className="content" id="main-content" tabIndex={-1}>
         <Outlet />
       </main>
+      <footer className="site-footer">
+        <div className="site-footer__inner">
+          <span>PAIMANA · Infrastructure project monitoring (demonstration build)</span>
+          <span>Base map © OpenStreetMap contributors</span>
+        </div>
+      </footer>
     </div>
   );
 }

@@ -1,22 +1,41 @@
 // src/components/StatCard.jsx
-// A reusable card that shows a single statistic (number + label).
-// Props: label (string), value (number), color (string)
+// Enterprise monitoring statistic: icon + label hierarchy, large tabular
+// value, optional supporting metric. No trend UI — the dataset has no
+// trend data, and none is invented.
+// Props: label, value, color (explicit accent), type (semantic accent:
+//   "info" | "success" | "warning" | "danger"), hint, icon (glyph).
 
-function StatCard({ label, value, color }) {
+const TYPE_ACCENTS = {
+  info: "var(--gov-blue)",
+  success: "var(--success)",
+  warning: "var(--warning)",
+  danger: "var(--danger)",
+};
+
+function StatCard({ label, value, color, type, hint, icon }) {
+  const accent = color || (type && TYPE_ACCENTS[type]) || undefined;
+
   return (
-    <div style={{
-      backgroundColor: "white",
-      borderRadius: "8px",
-      padding: "20px",
-      borderLeft: `4px solid ${color}`,
-      boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-    }}>
-      <p style={{ margin: 0, fontSize: "14px", color: "#888" }}>
-        {label}
-      </p>
-      <p style={{ margin: "8px 0 0", fontSize: "32px", fontWeight: "bold", color: color }}>
+    <div
+      className="card stat"
+      style={accent ? { borderLeftColor: accent } : undefined}
+    >
+      <div className="stat__top">
+        {icon ? (
+          <span
+            className="stat__icon"
+            style={accent ? { color: accent, borderColor: accent } : undefined}
+            aria-hidden="true"
+          >
+            {icon}
+          </span>
+        ) : null}
+        <p className="stat__label">{label}</p>
+      </div>
+      <p className="stat__value" style={accent ? { color: accent } : undefined}>
         {value}
       </p>
+      {hint ? <p className="stat__hint">{hint}</p> : null}
     </div>
   );
 }

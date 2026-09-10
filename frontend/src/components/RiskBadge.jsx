@@ -1,29 +1,16 @@
 // src/components/RiskBadge.jsx
-// A small colored tag that shows risk level: "High", "Medium", or "Low".
-// Props: level (string)
+// Risk tag supporting Low / Medium / High / Critical.
+// Accepts either a level string or a numeric score (score wins).
 
-function RiskBadge({ level }) {
-  // Pick color based on risk level
-  const colorMap = {
-    High:   { bg: "#fde8e8", text: "#e74c3c" },
-    Medium: { bg: "#fef3e2", text: "#f39c12" },
-    Low:    { bg: "#e8f8ef", text: "#27ae60" },
-  };
+import { normalizeRiskLevel } from "../utils/risk";
 
-  // Use the matching color, or gray if level is unknown
-  const colors = colorMap[level] || { bg: "#f0f0f0", text: "#666" };
-
+function RiskBadge({ level, score }) {
+  const normalized = normalizeRiskLevel(level, score);
+  const cls = `badge badge--${normalized.toLowerCase()}`;
   return (
-    <span style={{
-      display: "inline-block",
-      padding: "2px 10px",
-      borderRadius: "12px",
-      fontSize: "12px",
-      fontWeight: "bold",
-      backgroundColor: colors.bg,
-      color: colors.text,
-    }}>
-      {level} Risk
+    <span className={cls}>
+      <span className="badge__dot" aria-hidden="true" />
+      {normalized} Risk
     </span>
   );
 }
