@@ -1,33 +1,17 @@
-// src/pages/Dashboard.jsx
-// ADMIN Dashboard — Full dashboard with stats, recent projects, risk, and progress.
-// Fetches data from the API service (mock mode for now).
-// This is the upgraded version — uses loading/error states.
+// src/pages/PublicDashboard.jsx
+// Read-only public dashboard — shows stats, recent projects, and the India map.
+// Fetches data from the API (mock mode for now).
 
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { getDashboard } from "../services/api";
+import { getDashboard, getProjects } from "../services/api";
 import Loading from "../components/Loading";
 import StatCard from "../components/StatCard";
 import ProjectCard from "../components/ProjectCard";
-import RiskBadge from "../components/RiskBadge";
-import ProgressBar from "../components/ProgressBar";
 import ProjectModal from "../components/ProjectModal";
+import IndiaMap from "../components/Mapview";
 
 const BLUE = "#0B3D91";
-
-const sectionStyle = {
-  backgroundColor: "white",
-  borderRadius: "8px",
-  padding: "20px",
-  boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
-};
-
-const sectionTitleStyle = {
-  margin: "0 0 16px",
-  fontSize: "18px",
-  fontWeight: "bold",
-  color: BLUE,
-};
 
 const errorBoxStyle = {
   textAlign: "center",
@@ -37,23 +21,44 @@ const errorBoxStyle = {
   color: "#e74c3c",
 };
 
-function Dashboard() {
+const sectionStyle = {
+  backgroundColor: "white",
+  borderRadius: "8px",
+  padding: "20px",
+  boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+  marginBottom: "24px",
+};
+
+const sectionTitleStyle = {
+  margin: "0 0 16px",
+  fontSize: "18px",
+  fontWeight: "bold",
+  color: BLUE,
+};
+
+function PublicDashboard() {
   const [dashData, setDashData] = useState(null);
+  const [mapProjects, setMapProjects] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [modalProject, setModalProject] = useState(null);
   const navigate = useNavigate();
 
   useEffect(() => {
-    loadDashboard();
+    loadData();
   }, []);
 
-  async function loadDashboard() {
+  async function loadData() {
     setLoading(true);
     setError(null);
     try {
-      const data = await getDashboard();
-      setDashData(data);
+      // Fetch dashboard stats and full project list in parallel
+      const [dashboard, projects] = await Promise.all([
+        getDashboard(),
+        getProjects(),
+      ]);
+      setDashData(dashboard);
+      setMapProjects(projects.filter((p) => p.lat && p.lng));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -61,28 +66,26 @@ function Dashboard() {
     }
   }
 
-  // ----- LOADING -----
   if (loading) {
     return (
       <div>
-        <h1 style={{ margin: "0 0 4px", color: BLUE }}>🏛 PAIMANA — Admin Dashboard</h1>
+        <h1 style={{ margin: "0 0 4px", color: BLUE }}>🏛 PAIMANA — Public Dashboard</h1>
         <p style={{ margin: "0 0 24px", color: "#6B7280" }}>
-          Government Infrastructure Project Monitoring System
+          Infrastructure Project Monitoring System
         </p>
         <Loading />
       </div>
     );
   }
 
-  // ----- ERROR -----
   if (error) {
     return (
       <div>
-        <h1 style={{ margin: "0 0 4px", color: BLUE }}>🏛 PAIMANA — Admin Dashboard</h1>
+        <h1 style={{ margin: "0 0 4px", color: BLUE }}>🏛 PAIMANA — Public Dashboard</h1>
         <div style={errorBoxStyle}>
           <p style={{ fontWeight: "bold", fontSize: "18px" }}>⚠️ Failed to load dashboard</p>
           <p>{error}</p>
-          <button onClick={loadDashboard} style={{
+          <button onClick={loadData} style={{
             marginTop: "12px", padding: "8px 20px", fontSize: "14px",
             backgroundColor: "#e74c3c", color: "white", border: "none",
             borderRadius: "6px", cursor: "pointer",
@@ -92,15 +95,14 @@ function Dashboard() {
     );
   }
 
-  // ----- SUCCESS -----
   return (
     <div>
-      <h1 style={{ margin: "0 0 4px", color: BLUE }}>🏛 PAIMANA — Admin Dashboard</h1>
+      <h1 style={{ margin: "0 0 4px", color: BLUE }}>🏛 PAIMANA — Public Dashboard</h1>
       <p style={{ margin: "0 0 24px", color: "#6B7280" }}>
-        Government Infrastructure Project Monitoring System
+        Infrastructure Project Monitoring System — Read-Only View
       </p>
 
-      {/* ===== STAT CARDS ===== */}
+      {/* Stats Row */}
       {dashData?.stats && (
         <div style={{
           display: "grid",
@@ -114,7 +116,18 @@ function Dashboard() {
         </div>
       )}
 
-      {/* ===== RECENT PROJECTS ===== */}
+      {/* India Map */}
+      {mapProjects.length > 0 && (
+        <div style={sectionStyle}>
+          <h2 style={sectionTitleStyle}>🗺️ Project Locations</h2>
+          <IndiaMap
+            projects={mapProjects}
+            onProjectClick={(p) => setModalProject(p)}
+          />
+        </div>
+      )}
+
+      {/* Recent Projects */}
       {dashData?.recentProjects && (
         <div style={{ marginBottom: "24px" }}>
           <h2 style={sectionTitleStyle}>📋 Recent Projects</h2>
@@ -127,51 +140,12 @@ function Dashboard() {
               <ProjectCard
                 key={project.id}
                 project={project}
-                onClick={() => navigate(`/projects/${project.id}`)}
                 onQuickView={(p) => setModalProject(p)}
               />
             ))}
           </div>
         </div>
       )}
-
-      {/* ===== RISK + PROGRESS (side by side) ===== */}
-      <div style={{
-        display: "grid",
-        gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-        gap: "16px",
-      }}>
-        {/* Risk Overview */}
-        {dashData?.riskOverview && (
-          <div style={sectionStyle}>
-            <h2 style={sectionTitleStyle}>⚠️ Risk Overview</h2>
-            {dashData.riskOverview.map((item) => (
-              <div key={item.level} style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                padding: "10px 0",
-                borderBottom: "1px solid #f0f0f0",
-              }}>
-                <RiskBadge level={item.level} />
-                <span style={{ fontSize: "20px", fontWeight: "bold", color: item.color }}>
-                  {item.count}
-                </span>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Progress Overview */}
-        {dashData?.progressOverview && (
-          <div style={sectionStyle}>
-            <h2 style={sectionTitleStyle}>📈 Progress Overview</h2>
-            {dashData.progressOverview.map((item) => (
-              <ProgressBar key={item.sector} label={item.sector} progress={item.progress} />
-            ))}
-          </div>
-        )}
-      </div>
 
       {/* Project Modal */}
       <ProjectModal
@@ -186,4 +160,4 @@ function Dashboard() {
   );
 }
 
-export default Dashboard;
+export default PublicDashboard;

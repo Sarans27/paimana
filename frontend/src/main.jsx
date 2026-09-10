@@ -1,15 +1,11 @@
+// src/main.jsx
+// This is the ENTRY POINT of your React app.
+// It takes your App component and puts it on screen.
+
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
-
-function App() {
-  return (
-    <div>
-      <h1>ProjectPulse</h1>
-      <p>Frontend is working!</p>
-    </div>
-  )
-}
+import App from './App'           // ← Import App from App.jsx
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
